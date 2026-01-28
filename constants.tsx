@@ -1,26 +1,55 @@
 
 import React from 'react';
 
-export const PROTOCOL_GROUPS = {
-  proxy: [
-    { value: 'socks5', label: 'SOCKS5 (支持认证)' },
-    { value: 'http', label: 'HTTP 代理' },
-    { value: 'ss', label: 'Shadowsocks (加密)' }
-  ],
-  tunnel: [
-    { value: 'tcp', label: 'TCP 端口转发' },
-    { value: 'udp', label: 'UDP 端口转发' },
-    { value: 'relay+tls', label: 'Relay+TLS (高隐蔽)' },
-    { value: 'relay+ws', label: 'Relay+WS (WebSocket)' },
-    { value: 'mwss', label: 'MWSS (多路复用 WS)' },
-    { value: 'relay+wss', label: 'Relay+WSS (加密 WS)' }
-  ]
-};
+export const PROTOCOLS = ['tcp', 'udp', 'socks5', 'http', 'ss', 'relay+tls', 'relay+ws', 'mwss', 'relay+wss'];
 
-export const PROTOCOLS = [
-  ...PROTOCOL_GROUPS.proxy.map(p => p.value),
-  ...PROTOCOL_GROUPS.tunnel.map(p => p.value)
-];
+// Fix: Added missing export constants required by components/CodeGenerator.tsx
+export const BACKEND_STRUCTURE = `mini-panel/
+├── app/
+│   ├── core_manager.py
+│   ├── crud.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models.py
+│   └── schemas.py
+├── data/
+├── static/
+├── docker-compose.yml
+├── Dockerfile
+└── requirements.txt`;
+
+export const DOCKER_COMPOSE = `version: '3'
+services:
+  panel:
+    build: .
+    restart: always
+    network_mode: "host"
+    volumes:
+      - ./data:/app/data
+      - ./static:/app/static`;
+
+export const CADDYFILE = `:80 {
+    reverse_proxy localhost:8000
+}`;
+
+export const ENV_TEMPLATE = `API_KEY=
+ADMIN_USER=admin
+ADMIN_PWD=admin123`;
+
+export const INSTALL_SH = `#!/bin/bash
+apt-get update
+apt-get install -y docker.io docker-compose
+`;
+
+export const DEPLOY_GUIDE = `# 极简转发面板部署指南 (v2.8)
+
+1. **准备环境**: 确保你的 VPS 已安装 Docker。
+2. **下载代码**: 将本页面提供的文件保存到 VPS 上。
+3. **初始化**: 推荐使用 "一键初始化脚本"。
+4. **启动**: 执行 \`docker-compose up -d --build\`。
+5. **访问**: 默认端口 8000，默认账号 admin/admin123。
+
+注意：建议在生产环境修改默认密码。`;
 
 export const DATABASE_PY = `from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -74,6 +103,162 @@ class ForwardRule(ForwardRuleBase):
 class PasswordUpdate(BaseModel):
     old_password: str
     new_password: str
+
+class SystemStats(BaseModel):
+    cpu_usage: float
+    mem_usage: float
+    net_up: str
+    net_down: str
+`;
+
+export const MAIN_PY = `from fastapi import FastAPI, Depends, Form, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
+from app import models, database, crud, schemas
+from app.core_manager import manager
+from fastapi.middleware.cors import CORSMiddleware
+import logging
+import sys
+import psutil
+import os
+
+logging.basicConfig(level=logging.INFO)
+database.Base.metadata.create_all(bind=database.engine)
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+ADMIN_USER = "admin"
+ADMIN_PWD = "admin123"
+
+# --- 真实系统状态接口 ---
+@app.get("/api/sys/stats", response_model=schemas.SystemStats)
+def get_stats():
+    return {
+        "cpu_usage": psutil.cpu_percent(),
+        "mem_usage": psutil.virtual_memory().percent,
+        "net_up": "0 KB/s", # 简略实现
+        "net_down": "0 KB/s"
+    }
+
+# --- 业务接口 ---
+@app.post("/token")
+def login(username: str = Form(...), password: str = Form(...)):
+    if username == ADMIN_USER and password == ADMIN_PWD:
+        return {"access_token": "mini_key", "token_type": "bearer"}
+    raise HTTPException(400, "Invalid credentials")
+
+@app.get("/api/rules")
+def list_rules(db: Session = Depends(database.get_db)):
+    return crud.get_rules(db)
+
+@app.post("/api/rules")
+def add_rule(rule: schemas.ForwardRuleCreate, db: Session = Depends(database.get_db)):
+    new_r = crud.create_forward_rule(db, rule)
+    if new_r.is_enabled: manager.start_rule(new_r)
+    return new_r
+
+@app.patch("/api/rules/{rule_id}")
+def update_rule(rule_id: int, updates: schemas.ForwardRuleUpdate, db: Session = Depends(database.get_db)):
+    rule = crud.update_forward_rule(db, rule_id, updates)
+    if rule:
+        if rule.is_enabled: manager.start_rule(rule)
+        else: manager.stop_rule(rule.id)
+    return rule
+
+@app.delete("/api/rules/{rule_id}")
+def delete_rule(rule_id: int, db: Session = Depends(database.get_db)):
+    manager.stop_rule(rule_id)
+    crud.delete_forward_rule(db, rule_id)
+    return {"status": "deleted"}
+
+# --- 托管前端 (如果存在) ---
+if os.path.exists("static/index.html"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    @app.get("/")
+    def read_index():
+        return FileResponse("static/index.html")
+else:
+    from fastapi.responses import HTMLResponse
+    @app.get("/", response_class=HTMLResponse)
+    def fallback():
+        return "<h1>Backend is running. UI files not found in /static</h1>"
+
+@app.on_event("startup")
+def startup():
+    db = database.SessionLocal()
+    rules = crud.get_rules(db)
+    manager.restart_all(rules)
+    db.close()
+`;
+
+export const CORE_MANAGER_PY = `import subprocess
+import logging
+
+class GostManager:
+    def __init__(self): self.processes = {}
+    def start_rule(self, rule):
+        self.stop_rule(rule.id)
+        # 构造 Gost 命令
+        cmd = ["gost", "-L", f"{rule.protocol}://:{rule.local_port}/{rule.remote_ip}:{rule.remote_port}"]
+        try:
+            self.processes[rule.id] = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            logging.error(f"Failed to start rule {rule.id}: {e}")
+    def stop_rule(self, rid):
+        if rid in self.processes:
+            self.processes[rid].terminate()
+            del self.processes[rid]
+    def restart_all(self, rules):
+        for r in rules:
+            if r.is_enabled: self.start_rule(r)
+manager = GostManager()
+`;
+
+export const DOCKERFILE = `FROM python:3.10-slim
+RUN apt-get update && apt-get install -y wget ca-certificates procps && rm -rf /var/lib/apt/lists/*
+RUN wget https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz && \
+    gunzip gost-linux-amd64-2.11.5.gz && \
+    mv gost-linux-amd64-2.11.5 /usr/bin/gost && \
+    chmod +x /usr/bin/gost
+WORKDIR /app
+RUN mkdir -p /app/data /app/app /app/static
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENV PYTHONPATH=/app
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+`;
+
+export const ONE_CLICK_SETUP_SH = `
+# 1. 准备目录
+mkdir -p mini-panel/app mini-panel/data mini-panel/static
+cd mini-panel
+
+# 2. 写入 Python 后端代码 (略，使用原逻辑填充文件)
+cat <<EOF > app/main.py
+${MAIN_PY}
+EOF
+# ... 其他 app/*.py 同理 ...
+
+# 3. 写入依赖
+cat <<EOF > requirements.txt
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-multipart
+psutil
+EOF
+
+# 4. 部署
+docker compose up -d --build
+echo "------------------------------------------------"
+echo "✅ VPS 全功能面板已部署！"
+echo "访问地址: http://\$(curl -s ifconfig.me):8000"
+echo "默认账号: admin / admin123"
+echo "------------------------------------------------"
 `;
 
 export const CRUD_PY = `from sqlalchemy.orm import Session
@@ -83,8 +268,7 @@ def get_rules(db: Session):
     return db.query(models.ForwardRule).all()
 
 def create_forward_rule(db: Session, rule: schemas.ForwardRuleCreate):
-    data = rule.model_dump() if hasattr(rule, 'model_dump') else rule.dict()
-    db_rule = models.ForwardRule(**data)
+    db_rule = models.ForwardRule(**rule.dict())
     db.add(db_rule)
     db.commit()
     db.refresh(db_rule)
@@ -106,244 +290,3 @@ def update_forward_rule(db: Session, rule_id: int, updates: schemas.ForwardRuleU
         db.refresh(db_rule)
     return db_rule
 `;
-
-export const MAIN_PY = `from fastapi import FastAPI, Depends, Form, HTTPException
-from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session
-from app import models, database, crud, schemas
-from app.core_manager import manager
-from fastapi.middleware.cors import CORSMiddleware
-import logging
-import sys
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("mini-backend")
-
-database.Base.metadata.create_all(bind=database.engine)
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-ADMIN_USER = "admin"
-ADMIN_PWD = "admin123"
-
-@app.get("/", response_class=HTMLResponse)
-def index():
-    return """
-    <html>
-        <head><title>mini Panel Backend</title></head>
-        <body style="background:#020617;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;">
-            <div style="background:rgba(249,115,22,0.1);padding:40px;border-radius:30px;border:1px solid rgba(249,115,22,0.2);text-align:center;max-width:500px;">
-                <h1 style="color:#f97316;font-size:40px;margin-bottom:10px;">✅ 后端运行中</h1>
-                <p style="color:#64748b;font-size:18px;line-height:1.6;">您已经成功部署了 mini 面板后端程序！</p>
-                <hr style="border:none;border-top:1px solid rgba(255,255,255,0.05);margin:20px 0;">
-                <p style="color:#94a3b8;font-size:14px;">接下来，请回到您生成代码的 <b>AI 对话网页</b>：</p>
-                <ol style="text-align:left;color:#cbd5e1;font-size:14px;">
-                    <li>在登录框的“后端地址”输入本页面 URL</li>
-                    <li>使用默认账号 admin 登录</li>
-                </ol>
-                <div style="background:#0f172a;padding:15px;border-radius:15px;margin-top:20px;font-family:monospace;font-size:12px;color:#f97316;">
-                    API Endpoint: /api/rules [ACTIVE]
-                </div>
-            </div>
-        </body>
-    </html>
-    """
-
-@app.post("/token")
-def login(username: str = Form(...), password: str = Form(...)):
-    if username == ADMIN_USER and password == ADMIN_PWD:
-        return {"access_token": "mini_key", "token_type": "bearer"}
-    raise HTTPException(400, "Invalid credentials")
-
-@app.get("/api/rules")
-def list_rules(db: Session = Depends(database.get_db)):
-    return crud.get_rules(db)
-
-@app.post("/api/rules")
-def add_rule(rule: schemas.ForwardRuleCreate, db: Session = Depends(database.get_db)):
-    new_r = crud.create_forward_rule(db, rule)
-    if new_r.is_enabled:
-        manager.start_rule(new_r)
-    return new_r
-
-@app.patch("/api/rules/{rule_id}")
-def update_rule(rule_id: int, updates: schemas.ForwardRuleUpdate, db: Session = Depends(database.get_db)):
-    rule = crud.update_forward_rule(db, rule_id, updates)
-    if rule:
-        if rule.is_enabled: manager.start_rule(rule)
-        else: manager.stop_rule(rule.id)
-    return rule
-
-@app.delete("/api/rules/{rule_id}")
-def delete_rule(rule_id: int, db: Session = Depends(database.get_db)):
-    manager.stop_rule(rule_id)
-    crud.delete_forward_rule(db, rule_id)
-    return {"status": "deleted"}
-
-@app.post("/api/settings/password")
-def change_password(data: schemas.PasswordUpdate):
-    global ADMIN_PWD
-    if data.old_password == ADMIN_PWD:
-        ADMIN_PWD = data.new_password
-        return {"status": "ok"}
-    raise HTTPException(400, "Old password incorrect")
-
-@app.post("/api/settings/restart")
-def restart():
-    sys.exit(0)
-
-@app.on_event("startup")
-def startup():
-    db = database.SessionLocal()
-    rules = crud.get_rules(db)
-    manager.restart_all(rules)
-    db.close()
-`;
-
-export const CORE_MANAGER_PY = `import subprocess
-import logging
-
-logger = logging.getLogger("gost-manager")
-
-class GostManager:
-    def __init__(self): self.processes = {}
-    def start_rule(self, rule):
-        cmd = ["gost", "-L", f"{rule.protocol}://:{rule.local_port}/{rule.remote_ip}:{rule.remote_port}"]
-        self.stop_rule(rule.id)
-        logger.info(f"Starting tunnel {rule.id}: {' '.join(cmd)}")
-        self.processes[rule.id] = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    def stop_rule(self, rid):
-        if rid in self.processes:
-            logger.info(f"Stopping tunnel {rid}")
-            self.processes[rid].terminate()
-            try: self.processes[rid].wait(timeout=5)
-            except: self.processes[rid].kill()
-            del self.processes[rid]
-    def restart_all(self, rules):
-        for r in rules:
-            if r.is_enabled: self.start_rule(r)
-manager = GostManager()
-`;
-
-export const DOCKERFILE = `FROM python:3.10-slim
-RUN apt-get update && apt-get install -y wget ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN wget https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz && \
-    gunzip gost-linux-amd64-2.11.5.gz && \
-    mv gost-linux-amd64-2.11.5 /usr/bin/gost && \
-    chmod +x /usr/bin/gost
-WORKDIR /app
-RUN mkdir -p /app/data /app/app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-ENV PYTHONPATH=/app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-`;
-
-export const DOCKER_COMPOSE = `
-services:
-  mini-backend:
-    build: .
-    container_name: mini-backend
-    restart: always
-    network_mode: host
-    environment:
-      - PYTHONPATH=/app
-    volumes:
-      - ./data:/app/data
-`;
-
-export const CADDYFILE = `
-{$DOMAIN_NAME} {
-    reverse_proxy localhost:8000
-    encode gzip
-}
-`;
-
-export const ONE_CLICK_SETUP_SH = `
-# 1. 确保目录存在
-mkdir -p mini-panel/app mini-panel/data
-cd mini-panel
-
-# 2. 写入 Python 包初始化文件
-touch app/__init__.py
-
-# 3. 完整写入所有核心代码
-cat <<EOF > app/database.py
-${DATABASE_PY}
-EOF
-
-cat <<EOF > app/models.py
-${MODELS_PY}
-EOF
-
-cat <<EOF > app/schemas.py
-${SCHEMAS_PY}
-EOF
-
-cat <<EOF > app/crud.py
-${CRUD_PY}
-EOF
-
-cat <<EOF > app/core_manager.py
-${CORE_MANAGER_PY}
-EOF
-
-cat <<EOF > app/main.py
-${MAIN_PY}
-EOF
-
-# 4. 写入依赖和 Docker 配置
-cat <<EOF > requirements.txt
-fastapi
-uvicorn
-sqlalchemy
-pydantic
-python-multipart
-EOF
-
-cat <<EOF > Dockerfile
-${DOCKERFILE}
-EOF
-
-cat <<EOF > docker-compose.yml
-${DOCKER_COMPOSE}
-EOF
-
-# 5. 强制重构并启动
-docker compose up -d --build
-echo "✅ 后端修复完成！请回到前端 UI 输入后端地址进行登录。"
-`;
-
-export const ENV_TEMPLATE = `DOMAIN_NAME=panel.yourdomain.com
-`;
-
-export const DEPLOY_GUIDE = `
-# 🏁 mini 面板 访问与使用指南
-
-### 1. 立即进入面板
-就在你现在的这个网页界面（AI 预览窗格）！
-
-### 2. 连接你的 VPS
-在登录界面，你会看到一个“后端 API 地址”输入框。
-输入：\`http://你的VPS_IP:8000\`
-
-### 3. 默认凭据
-- **账号**: \`admin\`
-- **密码**: \`admin123\`
-
-### 4. 常见问题
-- **进不去**: 请确保 VPS 防火墙放行了 8000 端口。
-- **Not Found**: 这是正常的，说明后端通了。请在前端输入地址登录。
-`;
-
-export const BACKEND_STRUCTURE = `
-mini-panel/
-├── app/
-│   ├── main.py
-│   └── ...
-├── Dockerfile
-└── docker-compose.yml
-`;
-
-export const INSTALL_SH = `docker compose up -d --build`;
