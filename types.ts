@@ -1,6 +1,6 @@
 
 export interface ForwardRule {
-  id: string;
+  id: number;
   local_port: number;
   remote_ip: string;
   remote_port: number;

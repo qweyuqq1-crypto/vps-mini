@@ -49,7 +49,8 @@ const Dashboard: React.FC = () => {
     } catch (e) { console.error("Toggle failed"); }
   };
 
-  const handleDelete = async (ruleId: string) => {
+  // Fixed type mismatch: ruleId should be number to match the type defined in types.ts
+  const handleDelete = async (ruleId: number) => {
     if (!confirm('确定要永久删除此转发规则吗？')) return;
     try {
       const res = await apiFetch(`/api/rules/${ruleId}`, { method: 'DELETE' });
