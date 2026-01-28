@@ -11,7 +11,8 @@ import {
   CADDYFILE,
   ENV_TEMPLATE,
   INSTALL_SH,
-  DEPLOY_GUIDE
+  DEPLOY_GUIDE,
+  ONE_CLICK_SETUP_SH
 } from '../constants';
 
 const CodeGenerator: React.FC = () => {
@@ -24,14 +25,15 @@ const CodeGenerator: React.FC = () => {
 
   const tabs = [
     { id: 'guide', label: '📖 部署指南', content: DEPLOY_GUIDE, lang: 'markdown' },
-    { id: 'install', label: 'install.sh (脚本)', content: INSTALL_SH, lang: 'bash' },
+    { id: 'setup', label: '🚀 一键初始化脚本', content: ONE_CLICK_SETUP_SH, lang: 'bash' },
+    { id: 'install', label: 'install.sh (组件安装)', content: INSTALL_SH, lang: 'bash' },
     { id: 'compose', label: 'docker-compose.yml', content: DOCKER_COMPOSE, lang: 'yaml' },
     { id: 'env', label: '.env (环境变量)', content: ENV_TEMPLATE, lang: 'text' },
     { id: 'caddy', label: 'Caddyfile', content: CADDYFILE, lang: 'text' },
     { id: 'structure', label: '项目目录', content: BACKEND_STRUCTURE, lang: 'text' },
     { id: 'main', label: 'main.py', content: MAIN_PY, lang: 'python' },
     { id: 'database', label: 'database.py', content: DATABASE_PY, lang: 'python' },
-    { id: 'models', label: 'models.py (Owner)', content: MODELS_PY, lang: 'python' },
+    { id: 'models', label: 'models.py', content: MODELS_PY, lang: 'python' },
     { id: 'schemas', label: 'schemas.py', content: SCHEMAS_PY, lang: 'python' },
     { id: 'docker', label: 'Dockerfile', content: DOCKERFILE, lang: 'dockerfile' },
   ];
@@ -42,7 +44,7 @@ const CodeGenerator: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-2">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">核心部署套件 (v2.5 Final)</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">核心部署套件 (v2.8)</h2>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">mini INFRASTRUCTURE AUTOMATION</p>
         </div>
       </div>
@@ -91,27 +93,27 @@ const CodeGenerator: React.FC = () => {
           <div className="w-8 h-8 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 mb-4 group-hover:scale-110 transition-transform">
             <span className="font-black">1</span>
           </div>
-          <h4 className="text-xs font-black text-orange-100 uppercase mb-2 tracking-widest">环境初始化</h4>
+          <h4 className="text-xs font-black text-orange-100 uppercase mb-2 tracking-widest">执行初始化</h4>
           <p className="text-[10px] text-slate-500 leading-relaxed font-bold">
-            在 VPS 上安装 Docker 并配置域名解析。确保 A 记录生效且关闭 Proxy。
+            使用一键脚本在 VPS 上生成 mini-panel 目录。解决文件夹找不到的问题。
           </p>
         </div>
         <div className="p-5 bg-amber-500/5 border border-amber-500/10 rounded-3xl shadow-sm group hover:border-amber-500/30 transition-all">
           <div className="w-8 h-8 bg-amber-500/20 rounded-xl flex items-center justify-center text-amber-400 mb-4 group-hover:scale-110 transition-transform">
             <span className="font-black">2</span>
           </div>
-          <h4 className="text-xs font-black text-amber-100 uppercase mb-2 tracking-widest">同步核心代码</h4>
+          <h4 className="text-xs font-black text-amber-100 uppercase mb-2 tracking-widest">配置 .env</h4>
           <p className="text-[10px] text-slate-500 leading-relaxed font-bold">
-            将本页面生成的 Python 代码和 Docker 编排文件上传至服务器指定目录。
+            确保 .env 文件在 mini-panel 目录下，包含正确的域名和 Key。
           </p>
         </div>
         <div className="p-5 bg-emerald-500/5 border border-emerald-500/10 rounded-3xl shadow-sm group hover:border-emerald-500/30 transition-all">
           <div className="w-8 h-8 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform">
             <span className="font-black">3</span>
           </div>
-          <h4 className="text-xs font-black text-emerald-100 uppercase mb-2 tracking-widest">启动安全访问</h4>
+          <h4 className="text-xs font-black text-emerald-100 uppercase mb-2 tracking-widest">启动引擎</h4>
           <p className="text-[10px] text-slate-500 leading-relaxed font-bold">
-            运行 install.sh，系统将自动申请 SSL 证书并开启 HTTPS 加密管理。
+            在目录内运行 docker-compose up -d --build，等待 SSL 证书申请完成。
           </p>
         </div>
       </div>
