@@ -22,6 +22,39 @@ export const PROTOCOLS = [
   ...PROTOCOL_GROUPS.tunnel.map(p => p.value)
 ];
 
+export const DEPLOY_GUIDE = `
+# mini 面板全自动化部署指南
+
+### 1. 基础环境
+- 操作系统: Debian 11+ / Ubuntu 20.04+ (推荐)
+- 权限: 需要 root 权限执行
+
+### 2. 域名准备 (关键)
+- 前往 Cloudflare 或其它服务商，添加 A 记录指向 VPS IP。
+- 关闭 Cloudflare 的小橘灯 (Proxy)，设为 DNS Only，否则 SSL 证书会申请失败。
+
+### 3. 一键部署流程
+在您的 VPS 终端依次执行以下命令：
+
+# 创建目录
+mkdir -p ~/mini-panel/app && cd ~/mini-panel
+
+# 创建环境配置文件 (请根据右侧 .env 模板修改)
+nano .env 
+
+# 将面板生成的 main.py, models.py 等放入 app/ 目录
+# 将 Dockerfile, docker-compose.yml, Caddyfile 放入当前目录
+
+# 运行安装脚本
+chmod +x install.sh
+./install.sh
+
+### 4. 常见问题
+- 端口无法访问：请检查 VPS 提供商的安全组是否放行了对应端口。
+- 证书申请失败：检查 80 端口是否被占用，或域名解析是否生效。
+- 数据位置：数据库文件位于 ./data/aurora.db，请妥善备份该文件。
+`;
+
 export const BACKEND_STRUCTURE = `
 aurora-panel/
 ├── app/
