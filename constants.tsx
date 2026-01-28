@@ -130,11 +130,20 @@ ADMIN_PWD = "admin123"
 def index():
     return """
     <html>
-        <body style="background:#020617;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-            <h1 style="color:#f97316;">mini Backend is Running</h1>
-            <p style="color:#64748b;">Please use the management panel UI to login.</p>
-            <div style="background:#1e293b;padding:20px;border-radius:10px;margin-top:20px;">
-                API Status: <span style="color:#22c55e;">ONLINE</span>
+        <head><title>mini Panel Backend</title></head>
+        <body style="background:#020617;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;">
+            <div style="background:rgba(249,115,22,0.1);padding:40px;border-radius:30px;border:1px solid rgba(249,115,22,0.2);text-align:center;max-width:500px;">
+                <h1 style="color:#f97316;font-size:40px;margin-bottom:10px;">✅ 后端运行中</h1>
+                <p style="color:#64748b;font-size:18px;line-height:1.6;">您已经成功部署了 mini 面板后端程序！</p>
+                <hr style="border:none;border-top:1px solid rgba(255,255,255,0.05);margin:20px 0;">
+                <p style="color:#94a3b8;font-size:14px;">接下来，请回到您生成代码的 <b>AI 对话网页</b>：</p>
+                <ol style="text-align:left;color:#cbd5e1;font-size:14px;">
+                    <li>在登录框的“后端地址”输入本页面 URL</li>
+                    <li>使用默认账号 admin 登录</li>
+                </ol>
+                <div style="background:#0f172a;padding:15px;border-radius:15px;margin-top:20px;font-family:monospace;font-size:12px;color:#f97316;">
+                    API Endpoint: /api/rules [ACTIVE]
+                </div>
             </div>
         </body>
     </html>
