@@ -3,7 +3,7 @@ import React from 'react';
 
 export const PROTOCOLS = ['tcp', 'udp', 'socks5', 'http', 'ss', 'relay+tls', 'relay+ws', 'mwss', 'relay+wss'];
 
-export const BACKEND_STRUCTURE = `mini-panel/
+export const BACKEND_STRUCTURE = `vps-mini/
 ├── app/
 │   ├── main.py
 │   ├── models.py
@@ -11,7 +11,7 @@ export const BACKEND_STRUCTURE = `mini-panel/
 │   ├── database.py
 │   ├── crud.py
 │   └── core_manager.py
-├── static/              # 存放 index.html 和前端代码
+├── static/              # 存放前端 index.html
 ├── data/                # 数据库持久化目录
 ├── Dockerfile
 ├── docker-compose.yml
@@ -47,7 +47,7 @@ services:
         max-file: "3"`;
 
 export const ONE_CLICK_SETUP_SH = `#!/bin/bash
-# 自动化部署脚本 v3.0
+# 自动化部署脚本 v3.2
 
 # 检查 Docker
 if ! [ -x "$(command -v docker)" ]; then
@@ -55,7 +55,7 @@ if ! [ -x "$(command -v docker)" ]; then
   curl -fsSL https://get.docker.com | bash -s docker
 fi
 
-# 创建目录
+# 创建目录 (统一使用 vps-mini)
 mkdir -p vps-mini/app vps-mini/static vps-mini/data
 cd vps-mini
 
@@ -144,7 +144,6 @@ def update_rule(rule_id: int, updates: schemas.ForwardRuleUpdate, db: Session = 
         else: manager.stop_rule(rule.id)
     return rule
 
-# 修正：去掉了错误的括号
 if os.path.exists("static/index.html"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
     @app.get("/")
@@ -279,6 +278,6 @@ ADMIN_PWD=admin123`;
 export const INSTALL_SH = `apt-get update && apt-get install -y docker.io docker-compose`;
 
 export const DEPLOY_GUIDE = `# 部署指南
-1. 修正缩进：确保 docker-compose.yml 的 services 下方有缩进。
-2. 端口检查：确保 8000 端口未被占用。
-3. 容器管理：使用 docker-compose ps 查看状态。`;
+1. 确保已进入 vps-mini 目录。
+2. 将此页面的各文件内容分别粘贴到对应的文件中。
+3. 运行 docker-compose up -d --build 启动服务。`;
