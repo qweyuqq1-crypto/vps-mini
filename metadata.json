@@ -1,0 +1,5 @@
+{
+  "name": "Gost VPS Forwarding Panel",
+  "description": "A management dashboard for VPS traffic forwarding using Gost, including a backend code generator for FastAPI and SQLAlchemy foundation.",
+  "requestFramePermissions": []
+}
