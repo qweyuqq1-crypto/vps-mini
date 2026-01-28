@@ -11,13 +11,12 @@ export const BACKEND_STRUCTURE = `mini-panel/
 │   ├── database.py
 │   ├── crud.py
 │   └── core_manager.py
-├── static/              # 存放 index.html 和此预览界面的代码
+├── static/              # 存放 index.html 和前端代码
 ├── data/                # 数据库持久化目录
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt`;
 
-// Add missing DOCKERFILE export for CodeGenerator.tsx
 export const DOCKERFILE = `FROM python:3.10-slim
 RUN apt-get update && apt-get install -y wget ca-certificates procps && rm -rf /var/lib/apt/lists/*
 RUN wget https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz && \\
@@ -48,7 +47,7 @@ services:
         max-file: "3"`;
 
 export const ONE_CLICK_SETUP_SH = `#!/bin/bash
-# 自动化部署脚本 v2.9
+# 自动化部署脚本 v3.0
 
 # 检查 Docker
 if ! [ -x "$(command -v docker)" ]; then
@@ -57,8 +56,8 @@ if ! [ -x "$(command -v docker)" ]; then
 fi
 
 # 创建目录
-mkdir -p mini-panel/app mini-panel/static mini-panel/data
-cd mini-panel
+mkdir -p vps-mini/app vps-mini/static vps-mini/data
+cd vps-mini
 
 # 写入后端依赖
 cat <<EOF > requirements.txt
@@ -145,8 +144,9 @@ def update_rule(rule_id: int, updates: schemas.ForwardRuleUpdate, db: Session = 
         else: manager.stop_rule(rule.id)
     return rule
 
+# 修正：去掉了错误的括号
 if os.path.exists("static/index.html"):
-    app().mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", StaticFiles(directory="static"), name="static")
     @app.get("/")
     def serve_index(): return FileResponse("static/index.html")
 else:
@@ -242,7 +242,7 @@ def update_forward_rule(db: Session, rule_id: int, updates: schemas.ForwardRuleU
         if updates.is_enabled is not None:
             db_rule.is_enabled = updates.is_enabled
         db.commit()
-        db_rule.refresh(db_rule)
+        db.refresh(db_rule)
     return db_rule
 `;
 
