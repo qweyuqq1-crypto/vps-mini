@@ -46,119 +46,7 @@ services:
         max-size: "10m"
         max-file: "3"`;
 
-export const ONE_CLICK_SETUP_SH = `#!/bin/bash
-# 自动化部署脚本 v3.2
-
-# 检查 Docker
-if ! [ -x "$(command -v docker)" ]; then
-  echo "正在安装 Docker..."
-  curl -fsSL https://get.docker.com | bash -s docker
-fi
-
-# 创建目录 (统一使用 vps-mini)
-mkdir -p vps-mini/app vps-mini/static vps-mini/data
-cd vps-mini
-
-# 写入后端依赖
-cat <<EOF > requirements.txt
-fastapi
-uvicorn
-sqlalchemy
-pydantic
-python-multipart
-psutil
-EOF
-
-# 写入 Dockerfile
-cat <<EOF > Dockerfile
-${DOCKERFILE}
-EOF
-
-# 写入 docker-compose.yml
-cat <<EOF > docker-compose.yml
-${DOCKER_COMPOSE}
-EOF
-
-# 启动
-docker-compose up -d --build
-
-echo "------------------------------------------------"
-echo "✅ 部署完成！"
-echo "访问地址: http://\$(curl -s ifconfig.me):8000"
-echo "默认账号: admin / admin123"
-echo "------------------------------------------------"
-`;
-
-export const MAIN_PY = `from fastapi import FastAPI, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
-from app import models, database, crud, schemas
-from app.core_manager import manager
-from fastapi.middleware.cors import CORSMiddleware
-import os
-import psutil
-import logging
-
-logging.basicConfig(level=logging.INFO)
-database.Base.metadata.create_all(bind=database.engine)
-
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-@app.get("/api/sys/stats")
-def get_stats():
-    return {
-        "cpu_usage": psutil.cpu_percent(),
-        "mem_usage": psutil.virtual_memory().percent,
-        "net_up": "0 KB/s",
-        "net_down": "0 KB/s"
-    }
-
-@app.post("/token")
-def login(username: str = Form(...), password: str = Form(...)):
-    if username == "admin" and password == "admin123":
-        return {"access_token": "mini_key", "token_type": "bearer"}
-    raise HTTPException(401, "认证失败")
-
-@app.get("/api/rules")
-def list_rules(db: Session = Depends(database.get_db)):
-    return crud.get_rules(db)
-
-@app.post("/api/rules")
-def add_rule(rule: schemas.ForwardRuleCreate, db: Session = Depends(database.get_db)):
-    db_rule = crud.create_forward_rule(db, rule)
-    if db_rule.is_enabled: manager.start_rule(db_rule)
-    return db_rule
-
-@app.delete("/api/rules/{rule_id}")
-def delete_rule(rule_id: int, db: Session = Depends(database.get_db)):
-    manager.stop_rule(rule_id)
-    return crud.delete_forward_rule(db, rule_id)
-
-@app.patch("/api/rules/{rule_id}")
-def update_rule(rule_id: int, updates: schemas.ForwardRuleUpdate, db: Session = Depends(database.get_db)):
-    rule = crud.update_forward_rule(db, rule_id, updates)
-    if rule:
-        if rule.is_enabled: manager.start_rule(rule)
-        else: manager.stop_rule(rule.id)
-    return rule
-
-if os.path.exists("static/index.html"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    @app.get("/")
-    def serve_index(): return FileResponse("static/index.html")
-else:
-    @app.get("/")
-    def fallback(): return HTMLResponse("<h1>Backend Running</h1><p>UI files missing in static/</p>")
-
-@app.on_event("startup")
-def startup():
-    db = database.SessionLocal()
-    rules = crud.get_rules(db)
-    manager.restart_all(rules)
-    db.close()
-`;
+// Moving dependency definitions above ONE_CLICK_SETUP_SH to fix "used before declaration" errors
 
 export const DATABASE_PY = `from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -267,6 +155,149 @@ class GostManager:
 manager = GostManager()
 `;
 
+export const MAIN_PY = `from fastapi import FastAPI, Depends, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
+from app import models, database, crud, schemas
+from app.core_manager import manager
+from fastapi.middleware.cors import CORSMiddleware
+import os
+import psutil
+import logging
+
+logging.basicConfig(level=logging.INFO)
+database.Base.metadata.create_all(bind=database.engine)
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+@app.get("/api/sys/stats")
+def get_stats():
+    return {
+        "cpu_usage": psutil.cpu_percent(),
+        "mem_usage": psutil.virtual_memory().percent,
+        "net_up": "0 KB/s",
+        "net_down": "0 KB/s"
+    }
+
+@app.post("/token")
+def login(username: str = Form(...), password: str = Form(...)):
+    if username == "admin" and password == "admin123":
+        return {"access_token": "mini_key", "token_type": "bearer"}
+    raise HTTPException(401, "认证失败")
+
+@app.get("/api/rules")
+def list_rules(db: Session = Depends(database.get_db)):
+    return crud.get_rules(db)
+
+@app.post("/api/rules")
+def add_rule(rule: schemas.ForwardRuleCreate, db: Session = Depends(database.get_db)):
+    db_rule = crud.create_forward_rule(db, rule)
+    if db_rule.is_enabled: manager.start_rule(db_rule)
+    return db_rule
+
+@app.delete("/api/rules/{rule_id}")
+def delete_rule(rule_id: int, db: Session = Depends(database.get_db)):
+    manager.stop_rule(rule_id)
+    return crud.delete_forward_rule(db, rule_id)
+
+@app.patch("/api/rules/{rule_id}")
+def update_rule(rule_id: int, updates: schemas.ForwardRuleUpdate, db: Session = Depends(database.get_db)):
+    rule = crud.update_forward_rule(db, rule_id, updates)
+    if rule:
+        if rule.is_enabled: manager.start_rule(rule)
+        else: manager.stop_rule(rule.id)
+    return rule
+
+if os.path.exists("static/index.html"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    @app.get("/")
+    def serve_index(): return FileResponse("static/index.html")
+else:
+    @app.get("/")
+    def fallback(): return HTMLResponse("<h1>Backend Running</h1><p>UI files missing in static/. Please upload index.html</p>")
+
+@app.on_event("startup")
+def startup():
+    db = database.SessionLocal()
+    rules = crud.get_rules(db)
+    manager.restart_all(rules)
+    db.close()
+`;
+
+export const ONE_CLICK_SETUP_SH = `#!/bin/bash
+# 自动化部署脚本 v3.3 (修复路径混淆问题)
+
+# 1. 环境检查
+if ! [ -x "$(command -v docker)" ]; then
+  echo "正在安装 Docker..."
+  curl -fsSL https://get.docker.com | bash -s docker
+fi
+
+# 2. 清理旧的错误路径 (如果存在 mini-panel 则重命名或删除)
+cd ~
+if [ -d "mini-panel" ]; then
+    echo "检测到旧的 mini-panel 目录，正在同步至 vps-mini..."
+    rm -rf vps-mini
+    mv mini-panel vps-mini
+fi
+
+# 3. 初始化标准目录
+mkdir -p vps-mini/app vps-mini/static vps-mini/data
+cd vps-mini
+
+# 4. 写入后端依赖
+cat <<EOF > requirements.txt
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-multipart
+psutil
+EOF
+
+# 5. 写入主程序 (app/main.py)
+cat <<EOF > app/main.py
+${MAIN_PY}
+EOF
+
+# 6. 写入其它后端模块
+cat <<EOF > app/models.py
+${MODELS_PY}
+EOF
+cat <<EOF > app/schemas.py
+${SCHEMAS_PY}
+EOF
+cat <<EOF > app/database.py
+${DATABASE_PY}
+EOF
+cat <<EOF > app/crud.py
+${CRUD_PY}
+EOF
+cat <<EOF > app/core_manager.py
+${CORE_MANAGER_PY}
+EOF
+
+# 7. 写入 Docker 配置文件
+cat <<EOF > Dockerfile
+${DOCKERFILE}
+EOF
+cat <<EOF > docker-compose.yml
+${DOCKER_COMPOSE}
+EOF
+
+# 8. 启动容器
+docker-compose up -d --build
+
+echo "------------------------------------------------"
+echo "✅ 部署完成！"
+echo "项目路径: $(pwd)"
+echo "访问地址: http://\$(curl -s ifconfig.me):8000"
+echo "默认账号: admin / admin123"
+echo "------------------------------------------------"
+`;
+
 export const CADDYFILE = `# 可选：HTTPS 反代
 :80 {
     reverse_proxy localhost:8000
@@ -278,6 +309,6 @@ ADMIN_PWD=admin123`;
 export const INSTALL_SH = `apt-get update && apt-get install -y docker.io docker-compose`;
 
 export const DEPLOY_GUIDE = `# 部署指南
-1. 确保已进入 vps-mini 目录。
-2. 将此页面的各文件内容分别粘贴到对应的文件中。
-3. 运行 docker-compose up -d --build 启动服务。`;
+1. 确保你现在就在 vps-mini 目录下。
+2. 将此页面生成的 setup.sh 内容保存到 VPS 并运行：bash setup.sh
+3. 容器启动后，后端将运行在 8000 端口。`;
